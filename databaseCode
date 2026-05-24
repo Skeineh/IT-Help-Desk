@@ -1,0 +1,185 @@
+
+-- IT Help Desk & Ticketing Management System
+-- Database Creation Script
+-- Following SQL Server Standards v1.5 (PascalCase, naming rules)
+-- Database: MariaDB / HeidiSQL
+
+CREATE DATABASE IF NOT EXISTS ITHelpDesk
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+USE ITHelpDesk;
+-- TABLE: Role
+CREATE TABLE Role (
+    RoleName        VARCHAR(50)     NOT NULL,
+    Description     VARCHAR(255)    NULL,
+    CreatedDate     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT PkRole_RoleName PRIMARY KEY (RoleName)
+);
+-- TABLE: User
+CREATE TABLE User (
+    FullName        VARCHAR(100)    NOT NULL,
+    RoleName        VARCHAR(50)     NOT NULL,
+    Email           VARCHAR(100)    NOT NULL,
+    PasswordHash    VARCHAR(255)    NOT NULL,
+    PhoneNumber     VARCHAR(20)     NULL,
+    Department      VARCHAR(100)    NULL,
+    IsActive        TINYINT(1)      NOT NULL DEFAULT 1,
+    LastLoginDate   DATETIME        NULL,
+    CreatedDate     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT PkUser_FullName      PRIMARY KEY (FullName),
+    CONSTRAINT UnUser_Email         UNIQUE (Email),
+    CONSTRAINT FkUser_RoleName      FOREIGN KEY (RoleName) REFERENCES Role(RoleName)
+);
+
+-- TABLE: Category
+CREATE TABLE Category (
+    CategoryName    VARCHAR(50)     NOT NULL,
+    Description     VARCHAR(255)    NULL,
+    IsActive        TINYINT(1)      NOT NULL DEFAULT 1,
+
+    CONSTRAINT PkCategory_CategoryName PRIMARY KEY (CategoryName)
+);
+-- TABLE: Priority
+CREATE TABLE Priority (
+    PriorityName    VARCHAR(50)     NOT NULL,
+    PriorityLevel   INT             NOT NULL,
+
+    CONSTRAINT PkPriority_PriorityName PRIMARY KEY (PriorityName)
+);
+-- TABLE: Status
+CREATE TABLE Status (
+    StatusName      VARCHAR(50)     NOT NULL,
+    Description     VARCHAR(255)    NULL,
+
+    CONSTRAINT PkStatus_StatusName PRIMARY KEY (StatusName)
+);
+-- TABLE: Ticket
+CREATE TABLE Ticket (
+    TicketReferenceNumber   VARCHAR(20)     NOT NULL,
+    Title                   VARCHAR(200)    NOT NULL,
+    Description             TEXT            NOT NULL,
+    CategoryName            VARCHAR(50)     NOT NULL,
+    PriorityName            VARCHAR(50)     NOT NULL,
+    StatusName              VARCHAR(50)     NOT NULL,
+    CreatedByFullName       VARCHAR(100)    NOT NULL,
+    AssignedToFullName      VARCHAR(100)    NULL,
+    IsEscalated             TINYINT(1)      NOT NULL DEFAULT 0,
+    ResolutionNotes         TEXT            NULL,
+    ResolvedDate            DATETIME        NULL,
+    CreatedDate             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT PkTicket_TicketReferenceNumber   PRIMARY KEY (TicketReferenceNumber),
+    CONSTRAINT FkTicket_CategoryName            FOREIGN KEY (CategoryName)          REFERENCES Category(CategoryName),
+    CONSTRAINT FkTicket_PriorityName            FOREIGN KEY (PriorityName)          REFERENCES Priority(PriorityName),
+    CONSTRAINT FkTicket_StatusName              FOREIGN KEY (StatusName)            REFERENCES Status(StatusName),
+    CONSTRAINT FkTicket_CreatedByFullName       FOREIGN KEY (CreatedByFullName)     REFERENCES User(FullName),
+    CONSTRAINT FkTicket_AssignedToFullName      FOREIGN KEY (AssignedToFullName)    REFERENCES User(FullName)
+);
+-- TABLE: TicketComment
+CREATE TABLE TicketComment (
+    TicketReferenceNumber   VARCHAR(20)     NOT NULL,
+    CommentDate             DATETIME        NOT NULL,
+    AuthorFullName          VARCHAR(100)    NOT NULL,
+    CommentText             TEXT            NOT NULL,
+    IsInternalNote          TINYINT(1)      NOT NULL DEFAULT 0,
+
+    CONSTRAINT PkTicketComment_TicketReferenceNumberCommentDate
+        PRIMARY KEY (TicketReferenceNumber, CommentDate),
+    CONSTRAINT FkTicketComment_TicketReferenceNumber
+        FOREIGN KEY (TicketReferenceNumber) REFERENCES Ticket(TicketReferenceNumber),
+    CONSTRAINT FkTicketComment_AuthorFullName
+        FOREIGN KEY (AuthorFullName) REFERENCES User(FullName)
+);
+-- TABLE: TicketAttachment
+CREATE TABLE TicketAttachment (
+    TicketReferenceNumber   VARCHAR(20)     NOT NULL,
+    FileName                VARCHAR(255)    NOT NULL,
+    UploadedByFullName      VARCHAR(100)    NOT NULL,
+    FilePath                VARCHAR(500)    NOT NULL,
+    FileSize                BIGINT          NOT NULL,
+    CreatedDate             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT PkTicketAttachment_TicketReferenceNumberFileName
+        PRIMARY KEY (TicketReferenceNumber, FileName),
+    CONSTRAINT FkTicketAttachment_TicketReferenceNumber
+        FOREIGN KEY (TicketReferenceNumber) REFERENCES Ticket(TicketReferenceNumber),
+    CONSTRAINT FkTicketAttachment_UploadedByFullName
+        FOREIGN KEY (UploadedByFullName) REFERENCES User(FullName)
+);
+-- TABLE: TicketAssignmentHistory
+CREATE TABLE TicketAssignmentHistory (
+    TicketReferenceNumber   VARCHAR(20)     NOT NULL,
+    CreatedDate             DATETIME        NOT NULL,
+    AssignedToFullName      VARCHAR(100)    NULL,
+    AssignedByFullName      VARCHAR(100)    NOT NULL,
+
+    CONSTRAINT PkTicketAssignmentHistory_TicketReferenceNumberCreatedDate
+        PRIMARY KEY (TicketReferenceNumber, CreatedDate),
+    CONSTRAINT FkTicketAssignmentHistory_TicketReferenceNumber
+        FOREIGN KEY (TicketReferenceNumber) REFERENCES Ticket(TicketReferenceNumber),
+    CONSTRAINT FkTicketAssignmentHistory_AssignedToFullName
+        FOREIGN KEY (AssignedToFullName) REFERENCES User(FullName),
+    CONSTRAINT FkTicketAssignmentHistory_AssignedByFullName
+        FOREIGN KEY (AssignedByFullName) REFERENCES User(FullName)
+);
+-- TABLE: TicketStatusHistory
+CREATE TABLE TicketStatusHistory (
+    TicketReferenceNumber   VARCHAR(20)     NOT NULL,
+    CreatedDate             DATETIME        NOT NULL,
+    PreviousStatusName      VARCHAR(50)     NULL,
+    NewStatusName           VARCHAR(50)     NOT NULL,
+    ChangedByFullName       VARCHAR(100)    NOT NULL,
+
+    CONSTRAINT PkTicketStatusHistory_TicketReferenceNumberCreatedDate
+        PRIMARY KEY (TicketReferenceNumber, CreatedDate),
+    CONSTRAINT FkTicketStatusHistory_TicketReferenceNumber
+        FOREIGN KEY (TicketReferenceNumber) REFERENCES Ticket(TicketReferenceNumber),
+    CONSTRAINT FkTicketStatusHistory_PreviousStatusName
+        FOREIGN KEY (PreviousStatusName) REFERENCES Status(StatusName),
+    CONSTRAINT FkTicketStatusHistory_NewStatusName
+        FOREIGN KEY (NewStatusName) REFERENCES Status(StatusName),
+    CONSTRAINT FkTicketStatusHistory_ChangedByFullName
+        FOREIGN KEY (ChangedByFullName) REFERENCES User(FullName)
+);
+-- TABLE: Notification
+CREATE TABLE Notification (
+    FullName                VARCHAR(100)    NOT NULL,
+    CreatedDate             DATETIME        NOT NULL,
+    TicketReferenceNumber   VARCHAR(20)     NULL,
+    NotificationType        VARCHAR(50)     NOT NULL,
+    Title                   VARCHAR(200)    NOT NULL,
+    Message                 VARCHAR(500)    NOT NULL,
+    IsRead                  TINYINT(1)      NOT NULL DEFAULT 0,
+    ReadDate                DATETIME        NULL,
+
+    CONSTRAINT PkNotification_FullNameCreatedDate
+        PRIMARY KEY (FullName, CreatedDate),
+    CONSTRAINT FkNotification_FullName
+        FOREIGN KEY (FullName) REFERENCES User(FullName),
+    CONSTRAINT FkNotification_TicketReferenceNumber
+        FOREIGN KEY (TicketReferenceNumber) REFERENCES Ticket(TicketReferenceNumber)
+);
+-- TABLE: ActivityLog
+CREATE TABLE ActivityLog (
+    FullName            VARCHAR(100)    NOT NULL,
+    CreatedDate         DATETIME        NOT NULL,
+    ActionType          VARCHAR(100)    NOT NULL,
+    EntityType          VARCHAR(100)    NULL,
+    EntityReference     VARCHAR(100)    NULL,
+    ActionDescription   VARCHAR(500)    NOT NULL,
+    IpAddress           VARCHAR(45)     NULL,
+
+    CONSTRAINT PkActivityLog_FullNameCreatedDate
+        PRIMARY KEY (FullName, CreatedDate),
+    CONSTRAINT FkActivityLog_FullName
+        FOREIGN KEY (FullName) REFERENCES User(FullName)
+);
+-- Performance Indexes
+CREATE INDEX NIXTicket_StatusName          ON Ticket(StatusName);
+CREATE INDEX NIXTicket_CategoryName        ON Ticket(CategoryName);
+CREATE INDEX NIXTicket_AssignedToFullName  ON Ticket(AssignedToFullName);
+CREATE INDEX NIXTicket_CreatedDate         ON Ticket(CreatedDate);
+CREATE INDEX NIXUser_RoleName              ON User(RoleName);
