@@ -18,7 +18,7 @@ export default function Login() {
     setIsLoading(true);
     try {
       await login(email, password);
-      navigate('/dashboard', { replace: true });
+      navigate('/tickets', { replace: true });
     } catch (err) {
       if (err.response?.status === 422) {
         const errors = err.response.data.errors;
