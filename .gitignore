@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Environment files (security)
+.env
+.env.backup
+.env.production
+
+# Build output
+/dist
+/build
+public/build
+public/hot
+
+# Logs
+*.log
+storage/logs/*.log
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite / Cache
+.vite/
+.cache/
+
+# Laravel framework cache
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+bootstrap/cache/*.php
