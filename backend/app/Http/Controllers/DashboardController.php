@@ -39,6 +39,19 @@ class DashboardController extends Controller
             ->get()
             ->map(fn ($row) => ['label' => $row->label, 'value' => (int) $row->value]);
 
+        $agentRows = (clone $base)
+            ->join('User', 'Ticket.AssignedToUserNumber', '=', 'User.UserNumber')
+            ->select('User.FullName as label', DB::raw('COUNT(*) as value'))
+            ->whereNotNull('Ticket.AssignedToUserNumber')
+            ->groupBy('User.FullName')
+            ->orderByDesc('value')
+            ->limit(10)
+            ->get()
+            ->map(fn ($row) => ['label' => $row->label, 'value' => (int) $row->value]);
+
+        $total = (clone $base)->count();
+        $resolved = (int) ($statusCounts['Resolved'] ?? 0) + (int) ($statusCounts['Closed'] ?? 0);
+
         $recentTickets = (clone $base)
             ->with(['category', 'priority', 'status', 'creator', 'assignedTo'])
             ->orderBy('CreatedDate', 'desc')
@@ -46,13 +59,14 @@ class DashboardController extends Controller
             ->get();
 
         return response()->json([
-            'total_tickets' => (clone $base)->count(),
-            'open_tickets' => (int) ($statusCounts['Open'] ?? 0),
+            'total_tickets'       => $total,
+            'open_tickets'        => (int) ($statusCounts['Open'] ?? 0),
             'in_progress_tickets' => (int) ($statusCounts['InProgress'] ?? 0),
-            'pending_tickets' => (int) ($statusCounts['Pending'] ?? 0),
-            'resolved_tickets' => (int) ($statusCounts['Resolved'] ?? 0),
-            'closed_tickets' => (int) ($statusCounts['Closed'] ?? 0),
-            'tickets_by_status' => $statusRows->map(fn ($row) => [
+            'pending_tickets'     => (int) ($statusCounts['Pending'] ?? 0),
+            'resolved_tickets'    => (int) ($statusCounts['Resolved'] ?? 0),
+            'closed_tickets'      => (int) ($statusCounts['Closed'] ?? 0),
+            'resolution_rate'     => $total > 0 ? round($resolved / $total * 100) : 0,
+            'tickets_by_status'   => $statusRows->map(fn ($row) => [
                 'label' => $row->label,
                 'value' => (int) $row->value,
             ])->values(),
@@ -61,7 +75,8 @@ class DashboardController extends Controller
                 'value' => (int) $row->value,
             ])->values(),
             'tickets_by_priority' => $priorityRows->values(),
-            'recent_tickets' => $recentTickets,
+            'tickets_by_agent'    => $agentRows->values(),
+            'recent_tickets'      => $recentTickets,
         ]);
     }
 

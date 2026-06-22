@@ -48,6 +48,7 @@ export default function NavBar() {
             <nav className="flex items-center gap-1">
               <Link to="/tickets"   className={linkCls('/tickets')}>Tickets</Link>
               <Link to="/dashboard" className={linkCls('/dashboard')}>Dashboard</Link>
+              <Link to="/reports"   className={linkCls('/reports')}>Reports</Link>
               {user?.RoleName === 'Admin' && (
                 <Link to="/admin/users/new" className={linkCls('/admin/users/new')}>Create User</Link>
               )}

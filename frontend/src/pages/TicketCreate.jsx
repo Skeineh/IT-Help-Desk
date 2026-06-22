@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import * as svc from '../services/ticketService';
 
@@ -17,14 +17,40 @@ export default function TicketCreate() {
   const [categories, setCategories] = useState([]);
   const [priorities, setPriorities] = useState([]);
 
-  const [errors,  setErrors]  = useState({});
-  const [loading, setLoading] = useState(false);
+  const [errors,    setErrors]    = useState({});
+  const [loading,   setLoading]   = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiHint,    setAiHint]    = useState('');
 
   useEffect(() => {
     Promise.all([svc.getCategories(), svc.getPriorities()])
       .then(([c, p]) => { setCategories(c.data); setPriorities(p.data); })
       .catch(() => {});
   }, []);
+
+  const handleAiSuggest = async () => {
+    if (!title.trim() || !description.trim()) {
+      setAiHint('Please fill in the title and description first.');
+      return;
+    }
+    setAiLoading(true);
+    setAiHint('');
+    try {
+      const [catRes, priRes] = await Promise.all([
+        svc.aiCategorize(title, description),
+        svc.aiDetectPriority(title, description),
+      ]);
+      const suggestedCat = catRes.data.CategoryNumber;
+      const suggestedPri = priRes.data.PriorityNumber;
+      setCategoryNumber(String(suggestedCat));
+      setPriorityNumber(String(suggestedPri));
+      setAiHint(`AI suggested: ${catRes.data.CategoryName} · ${priRes.data.PriorityName}`);
+    } catch {
+      setAiHint('AI suggestion failed. Please select manually.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -102,6 +128,26 @@ export default function TicketCreate() {
                 className={`${fieldCls} resize-none`}
               />
               {errors.Description && <p className="text-red-500 text-xs mt-1">{errors.Description[0]}</p>}
+            </div>
+
+            {/* AI Suggest button */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleAiSuggest}
+                disabled={aiLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                {aiLoading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Sparkles className="w-4 h-4" />}
+                {aiLoading ? 'Analyzing…' : 'AI Suggest Category & Priority'}
+              </button>
+              {aiHint && (
+                <span className={`text-xs ${aiHint.includes('fail') || aiHint.includes('fill') ? 'text-amber-600' : 'text-violet-600 font-medium'}`}>
+                  {aiHint}
+                </span>
+              )}
             </div>
 
             {/* Category + Priority */}

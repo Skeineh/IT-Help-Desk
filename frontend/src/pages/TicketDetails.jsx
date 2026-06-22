@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, FileText, MessageSquare, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Loader2, MessageSquare, Paperclip, Pencil, Sparkles, Trash2, Wrench } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
 import StatusBadge from '../components/StatusBadge';
@@ -68,6 +68,13 @@ export default function TicketDetails() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
+
+  const [summary,          setSummary]          = useState('');
+  const [summaryLoading,   setSummaryLoading]   = useState(false);
+  const [summaryError,     setSummaryError]     = useState('');
+  const [steps,            setSteps]            = useState('');
+  const [stepsLoading,     setStepsLoading]     = useState(false);
+  const [stepsError,       setStepsError]       = useState('');
 
   const isAdmin = user?.RoleName === 'Admin';
   const isEmployee = user?.RoleName === 'Employee';
@@ -183,6 +190,47 @@ export default function TicketDetails() {
     await loadRelated();
   };
 
+  const handleSummarize = async () => {
+    setSummaryLoading(true);
+    setSummaryError('');
+    setSummary('');
+    try {
+      const { data } = await svc.aiSummarize({
+        title:            ticket.Title,
+        description:      ticket.Description,
+        category:         ticket.category?.CategoryName,
+        priority:         ticket.priority?.PriorityName,
+        status:           ticket.status?.StatusName,
+        assignedTo:       ticket.assignedTo?.FullName,
+        resolution_notes: ticket.ResolutionNotes,
+        comments: comments.map(c => ({ user: c.user?.name, body: c.body })),
+      });
+      setSummary(data.summary);
+    } catch {
+      setSummaryError('AI summary failed. Please try again.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const handleTroubleshoot = async () => {
+    setStepsLoading(true);
+    setStepsError('');
+    setSteps('');
+    try {
+      const { data } = await svc.aiTroubleshoot({
+        title:       ticket.Title,
+        description: ticket.Description,
+        category:    ticket.category?.CategoryName,
+      });
+      setSteps(data.steps);
+    } catch {
+      setStepsError('AI troubleshooting failed. Please try again.');
+    } finally {
+      setStepsLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen" style={PAGE_BG}>
@@ -289,6 +337,70 @@ export default function TicketDetails() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* AI Insights */}
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-indigo-50">
+            <Sparkles className="w-4 h-4 text-violet-600" />
+            <h2 className="text-base font-bold text-gray-900">AI Insights</h2>
+            <span className="text-xs text-violet-500 bg-violet-100 px-2 py-0.5 rounded-full font-medium ml-1">Powered by OpenAI</span>
+          </div>
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* Summary */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-violet-500" />
+                  <h3 className="text-sm font-bold text-gray-800">Ticket Summary</h3>
+                </div>
+                <button
+                  onClick={handleSummarize}
+                  disabled={summaryLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-violet-600 hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  {summaryLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {summaryLoading ? 'Generating…' : summary ? 'Regenerate' : 'Generate Summary'}
+                </button>
+              </div>
+              {summaryError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{summaryError}</p>}
+              {summary ? (
+                <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-gray-700 leading-relaxed">
+                  {summary}
+                </div>
+              ) : !summaryLoading && (
+                <p className="text-xs text-gray-400 italic">Click "Generate Summary" to get a concise AI overview of this ticket including description, comments, and resolution notes.</p>
+              )}
+            </div>
+
+            {/* Troubleshooting */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-blue-500" />
+                  <h3 className="text-sm font-bold text-gray-800">Troubleshooting Steps</h3>
+                </div>
+                <button
+                  onClick={handleTroubleshoot}
+                  disabled={stepsLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  {stepsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />}
+                  {stepsLoading ? 'Analyzing…' : steps ? 'Regenerate' : 'Get Steps'}
+                </button>
+              </div>
+              {stepsError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{stepsError}</p>}
+              {steps ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {steps}
+                </div>
+              ) : !stepsLoading && (
+                <p className="text-xs text-gray-400 italic">Click "Get Steps" for AI-generated troubleshooting suggestions based on this ticket's issue and category.</p>
+              )}
+            </div>
+
           </div>
         </div>
 

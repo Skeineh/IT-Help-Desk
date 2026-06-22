@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\AiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TicketAttachmentController;
 use App\Http\Controllers\TicketCommentController;
 use App\Http\Controllers\TicketController;
@@ -63,6 +65,17 @@ Route::middleware(['auth:api', 'password.changed'])->group(function () {
     Route::get('statuses', fn () =>
         response()->json(Status::orderBy('StatusNumber')->get())
     );
+
+    // AI endpoints
+    Route::post('ai/categorize',      [AiController::class, 'categorize']);
+    Route::post('ai/priority',        [AiController::class, 'detectPriority']);
+    Route::post('ai/chat',            [AiController::class, 'chat']);
+    Route::post('ai/summarize',       [AiController::class, 'summarize']);
+    Route::post('ai/troubleshoot',    [AiController::class, 'troubleshoot']);
+
+    // Report export endpoints
+    Route::get('reports/tickets/pdf',   [ReportController::class, 'exportPdf']);
+    Route::get('reports/tickets/excel', [ReportController::class, 'exportExcel']);
 
     Route::get('agents', function () {
         $user = JWTAuth::parseToken()->authenticate();

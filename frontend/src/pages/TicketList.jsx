@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Plus, Search, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, AlertCircle, FileText, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/NavBar';
 import StatusBadge from '../components/StatusBadge';
@@ -36,6 +36,7 @@ export default function TicketList() {
   const [error,         setError]         = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [refreshKey,    setRefreshKey]    = useState(0);
+  const [exporting,     setExporting]     = useState('');
 
   const isAdmin    = user?.RoleName === 'Admin';
   const isEmployee = user?.RoleName === 'Employee';
@@ -81,6 +82,35 @@ export default function TicketList() {
     setPage(1);
   };
 
+  const activeFilters = () => {
+    const p = {};
+    if (activeSearch) p.search   = activeSearch;
+    if (statusFilter) p.status   = statusFilter;
+    if (catFilter)    p.category = catFilter;
+    if (priFilter)    p.priority = priFilter;
+    return p;
+  };
+
+  const handleExport = async (type) => {
+    setExporting(type);
+    try {
+      const fn   = type === 'pdf' ? svc.exportTicketsPdf : svc.exportTicketsExcel;
+      const ext  = type === 'pdf' ? 'pdf' : 'xlsx';
+      const mime = type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const { data } = await fn(activeFilters());
+      const url  = URL.createObjectURL(new Blob([data], { type: mime }));
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `tickets-report-${new Date().toISOString().slice(0,10)}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Export failed. Please try again.');
+    } finally {
+      setExporting('');
+    }
+  };
+
   const handleDelete = async () => {
     try {
       await svc.deleteTicket(deleteConfirm);
@@ -113,13 +143,37 @@ export default function TicketList() {
             <h1 className="text-2xl font-bold text-white">Tickets</h1>
             <p className="text-slate-400 text-sm mt-0.5">{meta.total} ticket{meta.total !== 1 ? 's' : ''}</p>
           </div>
-          <Link
-            to="/tickets/new"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            New Ticket
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExport('pdf')}
+              disabled={!!exporting}
+              title="Export PDF"
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            >
+              {exporting === 'pdf'
+                ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <FileText className="w-4 h-4" />}
+              PDF
+            </button>
+            <button
+              onClick={() => handleExport('excel')}
+              disabled={!!exporting}
+              title="Export Excel"
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            >
+              {exporting === 'excel'
+                ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <FileSpreadsheet className="w-4 h-4" />}
+              Excel
+            </button>
+            <Link
+              to="/tickets/new"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Ticket
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}

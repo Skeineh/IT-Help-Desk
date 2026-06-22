@@ -1,5 +1,16 @@
 import api from './api';
 
+// Report exports – open as download in new tab
+export const exportTicketsPdf   = (params) => api.get('/reports/tickets/pdf',   { params, responseType: 'blob' });
+export const exportTicketsExcel = (params) => api.get('/reports/tickets/excel', { params, responseType: 'blob' });
+
+// AI endpoints
+export const aiCategorize     = (title, description) => api.post('/ai/categorize', { title, description });
+export const aiDetectPriority = (title, description) => api.post('/ai/priority',   { title, description });
+export const aiChat           = (messages)           => api.post('/ai/chat',       { messages });
+export const aiSummarize      = (payload)            => api.post('/ai/summarize',   payload);
+export const aiTroubleshoot   = (payload)            => api.post('/ai/troubleshoot', payload);
+
 export const listTickets  = (params) => api.get('/tickets', { params });
 export const getTicket    = (id)     => api.get(`/tickets/${id}`);
 export const createTicket = (data)   => api.post('/tickets', data);
