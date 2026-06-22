@@ -15,6 +15,7 @@ class TicketAttachment extends Model
         'UploadedByUserNumber',
         'FileName',
         'FilePath',
+        'MimeType',
         'FileSize',
         'CreatedDate',
     ];

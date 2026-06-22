@@ -2,34 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActivityLog;
+use App\Http\Controllers\Concerns\AuthorizesTickets;
+use App\Models\Category;
+use App\Models\Priority;
+use App\Models\Status;
 use App\Models\Ticket;
 use App\Models\TicketAssignmentHistory;
 use App\Models\TicketStatusHistory;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class TicketController extends Controller
 {
-    private function resolveUser()
-    {
-        $user = JWTAuth::parseToken()->authenticate();
-        $user->loadMissing('role');
-        return $user;
-    }
-
-    private function logActivity(int $userNumber, string $actionType, int $ticketNumber, string $desc = null): void
-    {
-        ActivityLog::create([
-            'UserNumber'            => $userNumber,
-            'ActionType'            => $actionType,
-            'EntityType'            => 'Ticket',
-            'EntityReferenceNumber' => $ticketNumber,
-            'ActionDescription'     => $desc,
-            'IpAddress'             => request()->ip(),
-            'CreatedDate'           => now()->toDateTimeString(),
-        ]);
-    }
+    use AuthorizesTickets;
 
     // GET /api/tickets
     public function index(Request $request)
@@ -42,6 +27,11 @@ class TicketController extends Controller
         // Employees only see their own tickets
         if ($roleName === 'Employee') {
             $query->where('CreatedByUserNumber', $user->UserNumber);
+        }
+
+        // Agents only see tickets assigned to them
+        if ($roleName === 'Agent') {
+            $query->where('AssignedToUserNumber', $user->UserNumber);
         }
 
         // Search filter
@@ -72,7 +62,7 @@ class TicketController extends Controller
             return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
-        if ($user->role->RoleName === 'Employee' && $ticket->CreatedByUserNumber !== $user->UserNumber) {
+        if (!$this->canViewTicket($user, $ticket)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
@@ -113,6 +103,19 @@ class TicketController extends Controller
 
         $this->logActivity($user->UserNumber, 'TicketCreated', $ticket->TicketNumber, "Ticket {$refNum} created.");
 
+        $adminManagerIds = User::whereHas('role', fn ($q) => $q->whereIn('RoleName', ['Admin', 'Manager']))
+            ->pluck('UserNumber')
+            ->all();
+
+        $this->notifyMany(
+            $adminManagerIds,
+            $user,
+            'ticket_created',
+            'New ticket created',
+            "{$user->FullName} created {$refNum}: {$ticket->Title}.",
+            $ticket->TicketNumber
+        );
+
         return response()->json(
             $ticket->load(['category', 'priority', 'status', 'creator', 'assignedTo']),
             201
@@ -125,13 +128,15 @@ class TicketController extends Controller
         $user     = $this->resolveUser();
         $roleName = $user->role->RoleName;
 
-        $ticket = Ticket::find($id);
+        $ticket = Ticket::with(['category', 'priority', 'status', 'assignedTo', 'creator'])->find($id);
         if (!$ticket) {
             return response()->json(['message' => 'Ticket not found.'], 404);
         }
 
         $originalStatus   = $ticket->StatusNumber;
         $originalAssigned = $ticket->AssignedToUserNumber;
+        $originalCategory = $ticket->CategoryNumber;
+        $originalPriority = $ticket->PriorityNumber;
 
         if ($roleName === 'Employee') {
             if ($ticket->CreatedByUserNumber !== $user->UserNumber) {
@@ -151,7 +156,6 @@ class TicketController extends Controller
                 'CategoryNumber'       => 'sometimes|integer|exists:Category,CategoryNumber',
                 'PriorityNumber'       => 'sometimes|integer|exists:Priority,PriorityNumber',
                 'StatusNumber'         => 'sometimes|integer|exists:Status,StatusNumber',
-                'AssignedToUserNumber' => 'sometimes|nullable|integer|exists:User,UserNumber',
             ]);
         } else {
             // Manager or Admin
@@ -176,6 +180,43 @@ class TicketController extends Controller
                 'ChangedByUserNumber'  => $user->UserNumber,
                 'CreatedDate'          => now()->toDateTimeString(),
             ]);
+
+            $oldStatus = $ticket->status?->StatusName ?? 'Unspecified';
+            $newStatus = Status::find($validated['StatusNumber'])?->StatusName ?? 'Unspecified';
+
+            $this->logActivity(
+                $user->UserNumber,
+                'StatusChanged',
+                $ticket->TicketNumber,
+                "Status changed from {$oldStatus} to {$newStatus}.",
+                $oldStatus,
+                $newStatus
+            );
+
+            $notificationType = in_array($newStatus, ['Resolved', 'Closed'], true)
+                ? 'ticket_resolved'
+                : 'ticket_status_updated';
+
+            if ($roleName === 'Employee') {
+                $this->notifyUser(
+                    $ticket->AssignedToUserNumber,
+                    $user,
+                    $notificationType,
+                    'Ticket status updated',
+                    "{$user->FullName} changed {$ticket->TicketReferenceNumber} to {$newStatus}.",
+                    $ticket->TicketNumber
+                );
+            } else {
+                $this->notifyUser(
+                    $ticket->CreatedByUserNumber,
+                    $user,
+                    $notificationType,
+                    'Ticket status updated',
+                    "{$ticket->TicketReferenceNumber} status is now {$newStatus}.",
+                    $ticket->TicketNumber
+                );
+            }
+
             // Set ResolvedDate when ticket is marked Resolved (StatusNumber = 4)
             if ((int)$validated['StatusNumber'] === 4) {
                 $validated['ResolvedDate'] = now()->toDateTimeString();
@@ -186,15 +227,89 @@ class TicketController extends Controller
         if (isset($validated['AssignedToUserNumber']) && $validated['AssignedToUserNumber'] !== $originalAssigned) {
             TicketAssignmentHistory::create([
                 'TicketNumber'         => $ticket->TicketNumber,
+                'PreviousAssignedToUserNumber' => $originalAssigned,
                 'AssignedToUserNumber' => $validated['AssignedToUserNumber'],
                 'AssignedByUserNumber' => $user->UserNumber,
                 'CreatedDate'          => now()->toDateTimeString(),
             ]);
+
+            $oldAssignee = $ticket->assignedTo?->FullName ?? 'Unassigned';
+            $newAssignee = $validated['AssignedToUserNumber']
+                ? (User::find($validated['AssignedToUserNumber'])?->FullName ?? 'Unassigned')
+                : 'Unassigned';
+
+            $this->logActivity(
+                $user->UserNumber,
+                $originalAssigned ? 'TicketReassigned' : 'TicketAssigned',
+                $ticket->TicketNumber,
+                "Assignment changed from {$oldAssignee} to {$newAssignee}.",
+                $oldAssignee,
+                $newAssignee
+            );
+
+            $this->notifyUser(
+                $validated['AssignedToUserNumber'],
+                $user,
+                'ticket_assigned',
+                'Ticket assigned',
+                "{$ticket->TicketReferenceNumber} was assigned to you.",
+                $ticket->TicketNumber
+            );
+        }
+
+        if (isset($validated['CategoryNumber']) && (int) $validated['CategoryNumber'] !== (int) $originalCategory) {
+            $oldCategory = $ticket->category?->CategoryName ?? 'Unspecified';
+            $newCategory = Category::find($validated['CategoryNumber'])?->CategoryName ?? 'Unspecified';
+            $this->logActivity(
+                $user->UserNumber,
+                'CategoryChanged',
+                $ticket->TicketNumber,
+                "Category changed from {$oldCategory} to {$newCategory}.",
+                $oldCategory,
+                $newCategory
+            );
+        }
+
+        if (isset($validated['PriorityNumber']) && (int) $validated['PriorityNumber'] !== (int) $originalPriority) {
+            $oldPriority = $ticket->priority?->PriorityName ?? 'Unspecified';
+            $newPriority = Priority::find($validated['PriorityNumber'])?->PriorityName ?? 'Unspecified';
+            $this->logActivity(
+                $user->UserNumber,
+                'PriorityChanged',
+                $ticket->TicketNumber,
+                "Priority changed from {$oldPriority} to {$newPriority}.",
+                $oldPriority,
+                $newPriority
+            );
+            $this->notifyMany(
+                [$ticket->CreatedByUserNumber, $ticket->AssignedToUserNumber],
+                $user,
+                'ticket_priority_updated',
+                'Ticket priority updated',
+                "{$ticket->TicketReferenceNumber} priority is now {$newPriority}.",
+                $ticket->TicketNumber
+            );
+        }
+
+        foreach ([
+            'Title' => 'Title updated',
+            'Description' => 'Description updated',
+            'IsEscalated' => 'Escalation flag updated',
+            'ResolutionNotes' => 'Resolution notes updated',
+        ] as $field => $message) {
+            if (array_key_exists($field, $validated) && (string) $ticket->{$field} !== (string) $validated[$field]) {
+                $this->logActivity(
+                    $user->UserNumber,
+                    'TicketUpdated',
+                    $ticket->TicketNumber,
+                    $message,
+                    $field === 'Description' || $field === 'ResolutionNotes' ? null : (string) $ticket->{$field},
+                    $field === 'Description' || $field === 'ResolutionNotes' ? null : (string) $validated[$field]
+                );
+            }
         }
 
         $ticket->fill($validated)->save();
-
-        $this->logActivity($user->UserNumber, 'TicketUpdated', $ticket->TicketNumber, "Ticket {$ticket->TicketReferenceNumber} updated.");
 
         return response()->json(
             $ticket->load(['category', 'priority', 'status', 'creator', 'assignedTo'])

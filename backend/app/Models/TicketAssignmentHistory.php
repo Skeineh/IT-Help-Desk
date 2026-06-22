@@ -12,6 +12,7 @@ class TicketAssignmentHistory extends Model
 
     protected $fillable = [
         'TicketNumber',
+        'PreviousAssignedToUserNumber',
         'AssignedToUserNumber',
         'AssignedByUserNumber',
         'CreatedDate',
@@ -25,6 +26,11 @@ class TicketAssignmentHistory extends Model
     public function assignedTo()
     {
         return $this->belongsTo(User::class, 'AssignedToUserNumber', 'UserNumber');
+    }
+
+    public function previousAssignedTo()
+    {
+        return $this->belongsTo(User::class, 'PreviousAssignedToUserNumber', 'UserNumber');
     }
 
     public function assignedBy()

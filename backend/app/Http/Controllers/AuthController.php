@@ -87,35 +87,45 @@ class AuthController extends Controller
     }
 
     /**
-     * POST /api/auth/register
-     * Admin-only: creates a new user account.
+     * POST /api/change-password
+     * Authenticated users must provide their current password and a confirmed new password.
      */
-    public function register(Request $request)
+    public function changePassword(Request $request)
     {
-        $request->validate([
-            'RoleNumber'  => 'required|integer|exists:Role,RoleNumber',
-            'FullName'    => 'required|string|max:255',
-            'Email'       => 'required|email|unique:User,Email',
-            'Password'    => 'required|string|min:8',
-            'PhoneNumber' => 'nullable|string|max:50',
-            'Department'  => 'nullable|string|max:100',
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = User::create([
-            'RoleNumber'  => $request->RoleNumber,
-            'FullName'    => $request->FullName,
-            'Email'       => $request->Email,
-            'PasswordHash' => Hash::make($request->Password),
-            'PhoneNumber' => $request->PhoneNumber,
-            'Department'  => $request->Department,
-            'IsActive'    => true,
-            'CreatedDate' => now()->toDateTimeString(),
+        $user = JWTAuth::parseToken()->authenticate();
+
+        if (!Hash::check($validated['current_password'], $user->PasswordHash)) {
+            return response()->json([
+                'message' => 'The current password is incorrect.',
+                'errors' => [
+                    'current_password' => ['The current password is incorrect.'],
+                ],
+            ], 422);
+        }
+
+        $user->PasswordHash = Hash::make($validated['new_password']);
+        $user->MustChangePassword = false;
+        $user->save();
+
+        ActivityLog::create([
+            'UserNumber'            => $user->UserNumber,
+            'ActionType'            => 'PasswordChanged',
+            'EntityType'            => 'User',
+            'EntityReferenceNumber' => $user->UserNumber,
+            'ActionDescription'     => 'User changed their password.',
+            'IpAddress'             => $request->ip(),
+            'CreatedDate'           => now()->toDateTimeString(),
         ]);
 
         return response()->json([
-            'message' => 'User created successfully.',
-            'user'    => $this->userPayload($user->load('role')),
-        ], 201);
+            'message' => 'Password changed successfully.',
+            'user' => $this->userPayload($user->load('role')),
+        ]);
     }
 
     private function userPayload(User $user): array
@@ -129,6 +139,8 @@ class AuthController extends Controller
             'Department' => $user->Department,
             'PhoneNumber' => $user->PhoneNumber,
             'IsActive'   => $user->IsActive,
+            'MustChangePassword' => (bool) $user->MustChangePassword,
+            'must_change_password' => (bool) $user->MustChangePassword,
             'RoleNumber' => $user->RoleNumber,
             'RoleName'   => $user->role?->RoleName,
         ];

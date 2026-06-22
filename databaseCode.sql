@@ -36,6 +36,7 @@ CREATE TABLE User (
     PhoneNumber     VARCHAR(20)     NULL,
     Department      VARCHAR(100)    NULL,
     IsActive        TINYINT(1)      NOT NULL DEFAULT 1,
+    MustChangePassword TINYINT(1)   NOT NULL DEFAULT 1,
     LastLoginDate   DATETIME        NULL,
     CreatedDate     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT PkUser_UserNumber PRIMARY KEY (UserNumber),
@@ -127,6 +128,7 @@ CREATE TABLE TicketAttachment (
     UploadedByUserNumber    INT             NOT NULL,
     FileName                VARCHAR(255)    NOT NULL,
     FilePath                VARCHAR(500)    NOT NULL,
+    MimeType                VARCHAR(150)    NULL,
     FileSize                BIGINT          NOT NULL,
     CreatedDate             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT PkTicketAttachment_TicketAttachmentNumber PRIMARY KEY (TicketAttachmentNumber),
@@ -140,11 +142,13 @@ CREATE TABLE TicketAttachment (
 CREATE TABLE TicketAssignmentHistory (
     TicketAssignmentHistoryNumber   INT     NOT NULL AUTO_INCREMENT,
     TicketNumber                    INT     NOT NULL,
+    PreviousAssignedToUserNumber    INT     NULL,
     AssignedToUserNumber            INT     NULL,
     AssignedByUserNumber            INT     NOT NULL,
     CreatedDate                     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT PkTicketAssignmentHistory_TicketAssignmentHistoryNumber PRIMARY KEY (TicketAssignmentHistoryNumber),
     CONSTRAINT FkTicketAssignmentHistory_TicketNumber FOREIGN KEY (TicketNumber) REFERENCES Ticket(TicketNumber) ON DELETE CASCADE,
+    CONSTRAINT FkTicketAssignmentHistory_PreviousAssignedToUserNumber FOREIGN KEY (PreviousAssignedToUserNumber) REFERENCES User(UserNumber),
     CONSTRAINT FkTicketAssignmentHistory_AssignedToUserNumber FOREIGN KEY (AssignedToUserNumber) REFERENCES User(UserNumber),
     CONSTRAINT FkTicketAssignmentHistory_AssignedByUserNumber FOREIGN KEY (AssignedByUserNumber) REFERENCES User(UserNumber)
 );
@@ -194,6 +198,8 @@ CREATE TABLE ActivityLog (
     EntityType              VARCHAR(100)    NULL,
     EntityReferenceNumber   INT             NULL,
     ActionDescription       VARCHAR(500)    NULL,
+    OldValue                VARCHAR(255)    NULL,
+    NewValue                VARCHAR(255)    NULL,
     IpAddress               VARCHAR(45)     NULL,
     CreatedDate             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT PkActivityLog_ActivityLogNumber PRIMARY KEY (ActivityLogNumber),

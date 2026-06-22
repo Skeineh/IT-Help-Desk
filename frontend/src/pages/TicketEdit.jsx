@@ -70,7 +70,7 @@ export default function TicketEdit() {
         else setFetchError('Failed to load ticket.');
       })
       .finally(() => setFetchLoading(false));
-  }, [id]);
+  }, [id, canAdvanced, canAssign]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

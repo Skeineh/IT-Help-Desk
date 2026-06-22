@@ -17,8 +17,12 @@ export default function Login() {
     setError('');
     setIsLoading(true);
     try {
-      await login(email, password);
-      navigate('/tickets', { replace: true });
+      const loggedInUser = await login(email, password);
+      if (loggedInUser.MustChangePassword || loggedInUser.must_change_password) {
+        navigate('/change-password', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
       if (err.response?.status === 422) {
         const errors = err.response.data.errors;
@@ -110,10 +114,10 @@ export default function Login() {
                 {isLoading ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Signing in…
+                    Signing in...
                   </>
                 ) : (
-                  'Sign In →'
+                  'Sign In'
                 )}
               </button>
             </div>

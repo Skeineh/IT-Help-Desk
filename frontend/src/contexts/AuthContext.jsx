@@ -7,6 +7,11 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const persistUser = (nextUser) => {
+    localStorage.setItem('user', JSON.stringify(nextUser));
+    setUser(nextUser);
+  };
+
   // Hydrate user from stored token on first load
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -14,8 +19,17 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        localStorage.removeItem('user');
+      }
+    }
+
     api.get('/auth/me')
-      .then(({ data }) => setUser(data.user))
+      .then(({ data }) => persistUser(data.user))
       .catch(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -26,8 +40,17 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { Email: email, Password: password });
     localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    setUser(data.user);
+    persistUser(data.user);
+    return data.user;
+  };
+
+  const changePassword = async (currentPassword, newPassword, newPasswordConfirmation) => {
+    const { data } = await api.post('/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirmation: newPasswordConfirmation,
+    });
+    persistUser(data.user);
     return data.user;
   };
 
@@ -43,7 +66,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, changePassword, setUser: persistUser }}>
       {children}
     </AuthContext.Provider>
   );

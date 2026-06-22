@@ -1,8 +1,9 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, roles = null, allowPasswordChange = false }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -14,6 +15,19 @@ export default function ProtectedRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  const mustChangePassword = Boolean(user.MustChangePassword || user.must_change_password);
+  if (mustChangePassword && !allowPasswordChange) {
+    return <Navigate to="/change-password" replace state={{ from: location.pathname }} />;
+  }
+
+  if (!mustChangePassword && allowPasswordChange) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (roles && !roles.includes(user.RoleName)) {
+    return <Navigate to="/tickets" replace />;
   }
 
   return children;

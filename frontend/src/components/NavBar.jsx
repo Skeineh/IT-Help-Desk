@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Headphones, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import NotificationBell from './NotificationBell';
 
 const ROLE_COLORS = {
   Admin:    'bg-red-500/20 text-red-300 border-red-500/30',
@@ -47,11 +48,15 @@ export default function NavBar() {
             <nav className="flex items-center gap-1">
               <Link to="/tickets"   className={linkCls('/tickets')}>Tickets</Link>
               <Link to="/dashboard" className={linkCls('/dashboard')}>Dashboard</Link>
+              {user?.RoleName === 'Admin' && (
+                <Link to="/admin/users/new" className={linkCls('/admin/users/new')}>Create User</Link>
+              )}
             </nav>
           </div>
 
           {/* Right: user info + logout */}
           <div className="flex items-center gap-3">
+            <NotificationBell />
             <div className="hidden sm:flex items-center gap-2">
               <span className="text-slate-300 text-sm font-medium">{user?.FullName}</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${roleCls}`}>

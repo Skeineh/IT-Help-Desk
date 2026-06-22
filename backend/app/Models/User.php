@@ -19,6 +19,7 @@ class User extends Authenticatable implements JWTSubject
         'PhoneNumber',
         'Department',
         'IsActive',
+        'MustChangePassword',
         'LastLoginDate',
         'CreatedDate',
     ];
@@ -29,6 +30,7 @@ class User extends Authenticatable implements JWTSubject
 
     protected $casts = [
         'IsActive' => 'boolean',
+        'MustChangePassword' => 'boolean',
     ];
 
     public function getJWTIdentifier()
