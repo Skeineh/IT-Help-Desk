@@ -16,9 +16,6 @@ class ActivityLog extends Model
         'EntityType',
         'EntityReferenceNumber',
         'ActionDescription',
-        'OldValue',
-        'NewValue',
-        'IpAddress',
         'CreatedDate',
     ];
 

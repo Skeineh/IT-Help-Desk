@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesTickets;
+use App\Mail\WelcomeCredentialsMail;
 use App\Models\ActivityLog;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 
 class AdminUserController extends Controller
@@ -66,13 +68,26 @@ class AdminUserController extends Controller
             'EntityType' => 'User',
             'EntityReferenceNumber' => $user->UserNumber,
             'ActionDescription' => "Admin created user {$user->Email}.",
-            'IpAddress' => $request->ip(),
             'CreatedDate' => now()->toDateTimeString(),
         ]);
+
+        $emailSent = true;
+        $emailError = null;
+        try {
+            Mail::to($user->Email)->send(
+                new WelcomeCredentialsMail($user->FullName, $user->Email, $validated['Password'])
+            );
+        } catch (\Throwable $e) {
+            $emailSent = false;
+            $emailError = $e->getMessage();
+            \Log::error('Welcome email failed', ['to' => $user->Email, 'error' => $emailError]);
+        }
 
         return response()->json([
             'message' => 'User created successfully. They must change password on first login.',
             'user' => $this->userPayload($user->load('role')),
+            'email_sent' => $emailSent,
+            'email_error' => $emailError,
         ], 201);
     }
 

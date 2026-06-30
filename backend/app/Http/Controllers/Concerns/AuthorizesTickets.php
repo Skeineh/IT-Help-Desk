@@ -63,9 +63,6 @@ trait AuthorizesTickets
             'EntityType'            => 'Ticket',
             'EntityReferenceNumber' => $ticketNumber,
             'ActionDescription'     => $desc,
-            'OldValue'              => $oldValue,
-            'NewValue'              => $newValue,
-            'IpAddress'             => request()->ip(),
             'CreatedDate'           => now()->toDateTimeString(),
         ]);
     }

@@ -43,13 +43,15 @@ class AuthController extends Controller
         $user->LastLoginDate = $now;
         $user->save();
 
+        $user->loadMissing('role');
+        $roleName = $user->role?->RoleName ?? 'Unknown';
+
         ActivityLog::create([
             'UserNumber'            => $user->UserNumber,
             'ActionType'            => 'Login',
             'EntityType'            => 'User',
             'EntityReferenceNumber' => $user->UserNumber,
-            'ActionDescription'     => 'User logged in successfully.',
-            'IpAddress'             => $request->ip(),
+            'ActionDescription'     => "{$roleName} ({$user->FullName}) logged in successfully.",
             'CreatedDate'           => $now,
         ]);
 
@@ -118,7 +120,6 @@ class AuthController extends Controller
             'EntityType'            => 'User',
             'EntityReferenceNumber' => $user->UserNumber,
             'ActionDescription'     => 'User changed their password.',
-            'IpAddress'             => $request->ip(),
             'CreatedDate'           => now()->toDateTimeString(),
         ]);
 

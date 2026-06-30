@@ -155,10 +155,19 @@ export default function TicketDetails() {
     await loadRelated();
   };
 
+  const ALLOWED_UPLOAD_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!selectedFile) return;
     setAttachmentError('');
+
+    const ext = selectedFile.name.split('.').pop().toLowerCase();
+    if (!ALLOWED_UPLOAD_EXTENSIONS.includes(ext)) {
+      setAttachmentError('Only PDF, Word documents (.doc, .docx), and images (.jpg, .png) are allowed.');
+      return;
+    }
+
     setUploading(true);
     try {
       await svc.uploadAttachment(id, selectedFile);
@@ -532,6 +541,7 @@ export default function TicketDetails() {
           <form onSubmit={handleUpload} className="flex flex-col sm:flex-row gap-3">
             <input
               type="file"
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
               onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
               className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
             />

@@ -7,6 +7,14 @@ import * as svc from '../services/ticketService';
 
 const PAGE_BG = { backgroundColor: '#0A1929' };
 
+const STATUS_TRANSITIONS = {
+  1: [2, 5],     // Open       → InProgress, Closed
+  2: [3, 4, 5],  // InProgress → Pending, Resolved, Closed
+  3: [2, 5],     // Pending    → InProgress, Closed
+  4: [2, 5],     // Resolved   → InProgress, Closed
+  5: [],         // Closed     → (terminal)
+};
+
 export default function TicketEdit() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -22,8 +30,9 @@ export default function TicketEdit() {
   const [description,        setDescription]        = useState('');
   const [categoryNumber,     setCategoryNumber]      = useState('');
   const [priorityNumber,     setPriorityNumber]      = useState('');
-  const [statusNumber,       setStatusNumber]        = useState('');
-  const [assignedToUser,     setAssignedToUser]      = useState('');
+  const [statusNumber,         setStatusNumber]        = useState('');
+  const [originalStatusNumber, setOriginalStatusNumber] = useState(null);
+  const [assignedToUser,       setAssignedToUser]      = useState('');
   const [isEscalated,        setIsEscalated]         = useState(false);
   const [resolutionNotes,    setResolutionNotes]     = useState('');
 
@@ -55,6 +64,7 @@ export default function TicketEdit() {
         setCategoryNumber(String(t.CategoryNumber ?? ''));
         setPriorityNumber(String(t.PriorityNumber ?? ''));
         setStatusNumber(String(t.StatusNumber ?? ''));
+        setOriginalStatusNumber(t.StatusNumber ?? null);
         setAssignedToUser(t.AssignedToUserNumber ? String(t.AssignedToUserNumber) : '');
         setIsEscalated(Boolean(t.IsEscalated));
         setResolutionNotes(t.ResolutionNotes ?? '');
@@ -109,6 +119,11 @@ export default function TicketEdit() {
       setLoading(false);
     }
   };
+
+  const allowedStatuses = statuses.filter(s =>
+    s.StatusNumber === originalStatusNumber ||
+    (STATUS_TRANSITIONS[originalStatusNumber] ?? []).includes(s.StatusNumber)
+  );
 
   const fieldCls    = 'w-full px-3 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 transition';
   const disabledCls = 'w-full px-3 py-3 border border-gray-100 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed';
@@ -230,7 +245,7 @@ export default function TicketEdit() {
                   <label className={labelCls}>Status</label>
                   <select value={statusNumber} onChange={(e) => setStatusNumber(e.target.value)} className={fieldCls}>
                     <option value="">Select status</option>
-                    {statuses.map(s => <option key={s.StatusNumber} value={s.StatusNumber}>{s.StatusName}</option>)}
+                    {allowedStatuses.map(s => <option key={s.StatusNumber} value={s.StatusNumber}>{s.StatusName}</option>)}
                   </select>
                   {errors.StatusNumber && <p className="text-red-500 text-xs mt-1">{errors.StatusNumber[0]}</p>}
                 </div>

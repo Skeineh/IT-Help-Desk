@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesTickets;
+use App\Mail\TicketStatusChangedMail;
 use App\Models\Category;
 use App\Models\Priority;
 use App\Models\Status;
@@ -11,6 +12,8 @@ use App\Models\TicketAssignmentHistory;
 use App\Models\TicketStatusHistory;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class TicketController extends Controller
 {
@@ -138,6 +141,9 @@ class TicketController extends Controller
         $originalCategory = $ticket->CategoryNumber;
         $originalPriority = $ticket->PriorityNumber;
 
+        $statusEmailSent  = null;
+        $statusEmailError = null;
+
         if ($roleName === 'Employee') {
             if ($ticket->CreatedByUserNumber !== $user->UserNumber) {
                 return response()->json(['message' => 'Forbidden.'], 403);
@@ -173,6 +179,23 @@ class TicketController extends Controller
 
         // Track status change
         if (isset($validated['StatusNumber']) && (int)$validated['StatusNumber'] !== (int)$originalStatus) {
+            $allowedTransitions = [
+                1 => [2, 5],     // Open       → InProgress, Closed
+                2 => [3, 4, 5],  // InProgress → Pending, Resolved, Closed
+                3 => [2, 5],     // Pending    → InProgress, Closed
+                4 => [2, 5],     // Resolved   → InProgress, Closed
+                5 => [],         // Closed     → (terminal)
+            ];
+            $allowed = $allowedTransitions[(int)$originalStatus] ?? [];
+            if (!in_array((int)$validated['StatusNumber'], $allowed)) {
+                $fromName = Status::find($originalStatus)?->StatusName ?? 'Unknown';
+                $toName   = Status::find($validated['StatusNumber'])?->StatusName ?? 'Unknown';
+                return response()->json([
+                    'message' => "Invalid status transition: cannot move from {$fromName} to {$toName}.",
+                    'errors'  => ['StatusNumber' => ["Cannot move a ticket from {$fromName} to {$toName}."]],
+                ], 422);
+            }
+
             TicketStatusHistory::create([
                 'TicketNumber'         => $ticket->TicketNumber,
                 'PreviousStatusNumber' => $originalStatus,
@@ -215,6 +238,37 @@ class TicketController extends Controller
                     "{$ticket->TicketReferenceNumber} status is now {$newStatus}.",
                     $ticket->TicketNumber
                 );
+            }
+
+            // Send email notifications — creator always, assignee if not the changer
+            $emailRecipients = [];
+            if ($ticket->creator && (int)$ticket->CreatedByUserNumber !== (int)$user->UserNumber) {
+                $emailRecipients[] = $ticket->creator;
+            }
+            if ($ticket->assignedTo && (int)$ticket->AssignedToUserNumber !== (int)$user->UserNumber) {
+                $emailRecipients[] = $ticket->assignedTo;
+            }
+
+            $statusEmailSent = true;
+            foreach ($emailRecipients as $recipient) {
+                try {
+                    Mail::to($recipient->Email)->send(new TicketStatusChangedMail(
+                        ticketRef:     $ticket->TicketReferenceNumber,
+                        ticketTitle:   $ticket->Title,
+                        oldStatus:     $oldStatus,
+                        newStatus:     $newStatus,
+                        changedBy:     $user->FullName,
+                        recipientName: $recipient->FullName,
+                    ));
+                } catch (\Throwable $e) {
+                    $statusEmailSent  = false;
+                    $statusEmailError = $e->getMessage();
+                    Log::error('Status change email failed', [
+                        'ticket' => $ticket->TicketReferenceNumber,
+                        'to'     => $recipient->Email,
+                        'error'  => $statusEmailError,
+                    ]);
+                }
             }
 
             // Set ResolvedDate when ticket is marked Resolved (StatusNumber = 4)
@@ -311,9 +365,14 @@ class TicketController extends Controller
 
         $ticket->fill($validated)->save();
 
-        return response()->json(
-            $ticket->load(['category', 'priority', 'status', 'creator', 'assignedTo'])
-        );
+        $ticketData = $ticket->load(['category', 'priority', 'status', 'creator', 'assignedTo'])->toArray();
+
+        if ($statusEmailSent !== null) {
+            $ticketData['status_email_sent']  = $statusEmailSent;
+            $ticketData['status_email_error'] = $statusEmailError;
+        }
+
+        return response()->json($ticketData);
     }
 
     // DELETE /api/tickets/{id}

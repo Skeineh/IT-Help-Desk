@@ -12,7 +12,7 @@ class TicketAttachmentController extends Controller
 {
     use AuthorizesTickets;
 
-    private array $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'txt', 'log', 'zip', 'xlsx'];
+    private array $allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'];
 
     public function index($ticketId)
     {
@@ -50,20 +50,19 @@ class TicketAttachmentController extends Controller
         }
 
         $validated = $request->validate([
-            'file' => 'required|file|max:10240',
+            'file' => [
+                'required',
+                'file',
+                'max:10240',
+                'mimes:jpg,jpeg,png,pdf,doc,docx',
+            ],
+        ], [
+            'file.mimes' => 'Only PDF, Word documents (.doc, .docx), and images (.jpg, .png) are allowed.',
+            'file.max'   => 'The file must not exceed 10 MB.',
         ]);
 
-        $file = $validated['file'];
+        $file      = $validated['file'];
         $extension = strtolower($file->getClientOriginalExtension());
-
-        if (!in_array($extension, $this->allowedExtensions, true)) {
-            return response()->json([
-                'message' => 'Unsupported file type.',
-                'errors' => [
-                    'file' => ['Allowed file types: ' . implode(', ', $this->allowedExtensions) . '.'],
-                ],
-            ], 422);
-        }
 
         $storedName = uniqid('ticket_' . $ticket->TicketNumber . '_', true) . '.' . $extension;
         $path = $file->storeAs("ticket-attachments/{$ticket->TicketNumber}", $storedName, 'local');
